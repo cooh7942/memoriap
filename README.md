@@ -1,4 +1,4 @@
-# Pinframe
+# Memoriap
 
 > A macOS photo viewer that lets you browse photos alongside a live map — see exactly where each shot was taken.
 
@@ -29,7 +29,7 @@
 - **Persistent session** — Remembers the last open folder across launches via Security-Scoped Bookmarks
 - **External drive handling** — Alert shown when a connected drive is unmounted; bookmarks are auto-restored when the drive is reconnected
 - **New folder** — Right-click any folder in the sidebar → "새 폴더 만들기" to create a subfolder; the tree updates immediately
-- **Video playback** — Play iPhone (.mov) and Android (.mp4) videos in the center panel with native AVKit controls; first-frame thumbnails with a play badge appear in the strip
+- **Video playback** — Play iPhone (.mov) and Android (.mp4) videos in the center panel with native AVKit controls; first-frame thumbnails with a play badge appear in the strip; concurrent thumbnail generation is rate-limited to prevent resource exhaustion with large video folders
 - **Star rating** — Rate each photo 1–5 stars in the status bar (click same star to clear); saved as Lightroom-compatible XMP `xmp:Rating` metadata — embedded for JPEG/HEIC, sidecar `.xmp` for other formats
 - **Rating filter** — Multi-select exact-match filter: choose one or more star values (1–5) to show only photos with that exact rating; deselect all to restore the full list. Filter bar is always visible below the photo display.
 - **Fullscreen view** — Double-click the center photo or click the icon in the top-right corner to enter full-window view; navigate with ← → arrow keys; press ESC or double-click to exit.
@@ -47,9 +47,9 @@
 ## Build & Run
 
 ```bash
-git clone https://github.com/your-username/pinframe.git
-cd pinframe
-open pinframe.xcodeproj
+git clone https://github.com/your-username/memoriap.git
+cd memoriap
+open Memoriap.xcodeproj
 ```
 
 Then press **⌘R** in Xcode.
@@ -115,40 +115,53 @@ Build the app:
 Product → Show Build Folder in Finder
 ```
 
-Open the `Release` folder, then zip `pinframe.app` from the terminal:
+Open the `Release` folder, then zip `Memoriap.app` from the terminal:
 
 ```bash
-cd ~/Library/Developer/Xcode/DerivedData/pinframe-*/Build/Products/Release
-zip -r pinframe.zip pinframe.app
+cd ~/Library/Developer/Xcode/DerivedData/Memoriap-*/Build/Products/Release
+zip -r Memoriap.zip Memoriap.app
 ```
 
-Send `pinframe.zip` to your friend.
+### 3. Publish a GitHub Release
 
-### 3. How your friend installs it — pick whichever is easier
+Instead of sending the zip directly, attach it to a versioned **GitHub Release** so anyone can download it later.
+
+1. Push your code to GitHub.
+2. On the repository page, click **Releases** (right sidebar) → **Draft a new release**.
+3. Click **Choose a tag**, type a version such as `v1.0`, then **Create new tag on publish**.
+4. Add a release title (e.g. `Memoriap 1.0`) and notes describing what changed.
+5. Drag `Memoriap.zip` into the **Attach binaries by dropping them here** area.
+6. Click **Publish release**.
+
+The zip now appears on the repo's **Releases** page, organized by version. Share that page's link with your friend — they download `Memoriap.zip` from there.
+
+> Tip: you can automate this with a GitHub Actions workflow that builds and attaches the zip when you push a `v*` tag, but that requires setting up signing certificates — manual upload is simpler for sharing with friends.
+
+### 4. How your friend installs it — pick whichever is easier
 
 macOS blocks apps from unknown developers by default (Gatekeeper). Your friend needs to override that once. Two ways:
 
 #### Method A — One terminal command (faster, for tech-friendly friends)
 
-1. Unzip `pinframe.zip`
+1. Unzip `Memoriap.zip`
 2. Open Terminal and run:
    ```bash
-   xattr -rd com.apple.quarantine ~/Downloads/pinframe.app
+   xattr -rd com.apple.quarantine ~/Downloads/Memoriap.app
    ```
    > If the app is somewhere other than `~/Downloads/`, adjust the path.
-3. Drag `pinframe.app` to `/Applications`
+3. Drag `Memoriap.app` to `/Applications`
 4. Launch from Applications or Spotlight
 
 #### Method B — Right-click → Open (no terminal needed, for everyone else)
 
-1. Unzip `pinframe.zip`
-2. Right-click (or Control-click) `pinframe.app` → **Open**
+1. Unzip `Memoriap.zip`
+2. Right-click (or Control-click) `Memoriap.app` → **Open**
 3. In the "unidentified developer" warning, click **Open**
 4. If macOS still refuses (common on Sequoia 15+):
    - Go to **System Settings → Privacy & Security**
    - Scroll down to **Security**
-   - Click **Open Anyway** next to the pinframe.app notice
-5. Drag `pinframe.app` to `/Applications` for permanent installation
+   - Click **Open Anyway** next to the Memoriap.app notice
+5. Drag `Memoriap.app` to `/Applications` for permanent installation
 
 Once approved this way, the app launches normally on subsequent double-clicks.
 
@@ -157,10 +170,10 @@ Once approved this way, the app launches normally on subsequent double-clicks.
 ## Project Structure
 
 ```
-pinframe/
-├── pinframe.xcodeproj/
-└── pinframe/                      # Swift source
-    ├── pinframeApp.swift           # App entry point
+Memoriap/
+├── Memoriap.xcodeproj/
+└── Memoriap/                      # Swift source
+    ├── MemoriapApp.swift           # App entry point
     ├── ContentView.swift           # Root layout (3-panel HSplitView) + keyboard monitor
     ├── SidebarView.swift           # Folder tree + favorites
     ├── CenterView.swift            # Photo display + thumbnail strip
@@ -182,7 +195,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 ---
 ---
 
-# Pinframe (한국어)
+# Memoriap (한국어)
 
 > GPS 정보가 담긴 사진을 지도와 함께 감상할 수 있는 macOS 사진 뷰어입니다.
 
@@ -210,6 +223,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 - **즐겨찾기** — 폴더 우클릭 → 즐겨찾기에 추가 / 즐겨찾기에서 제거
 - **세션 복원** — Security-Scoped Bookmark로 마지막 폴더를 재실행 후에도 복원
 - **외장 디스크 처리** — 디스크 분리 시 알림 표시, 재연결 시 북마크 자동 복원
+- **동영상 재생** — 네이티브 AVKit 컨트롤로 iPhone(.mov) 및 Android(.mp4) 동영상을 센터 패널에서 재생; 썸네일 스트립에 첫 프레임 + 재생 배지 표시; 동영상이 많은 폴더에서도 썸네일 동시 생성 수를 제한해 안정적으로 동작
 - **별점** — 상태바에서 사진별 1~5 별점 부여 (같은 별 재클릭 시 해제); Lightroom 호환 XMP `xmp:Rating` 메타데이터로 저장 — JPEG/HEIC는 파일 내 임베드, 기타 포맷은 `.xmp` 사이드카 생성
 - **별점 필터** — 다중 선택 정확히 일치 필터: 1~5 중 하나 이상 선택 시 해당 별점 사진만 표시(이상 ❌); 전체 해제 시 전체 목록 복원. 필터 바는 항상 표시
 
@@ -224,9 +238,9 @@ MIT License — see [LICENSE](LICENSE) for details.
 ## 빌드 및 실행
 
 ```bash
-git clone https://github.com/your-username/pinframe.git
-cd pinframe
-open pinframe.xcodeproj
+git clone https://github.com/your-username/memoriap.git
+cd memoriap
+open Memoriap.xcodeproj
 ```
 
 Xcode에서 **⌘R** 을 누르면 빌드 및 실행됩니다.
@@ -289,40 +303,53 @@ Product → Scheme → Edit Scheme → Run → Build Configuration → Release
 Product → Show Build Folder in Finder
 ```
 
-`Release` 폴더에서 `pinframe.app`을 확인한 뒤, 터미널에서 zip으로 압축:
+`Release` 폴더에서 `Memoriap.app`을 확인한 뒤, 터미널에서 zip으로 압축:
 
 ```bash
-cd ~/Library/Developer/Xcode/DerivedData/pinframe-*/Build/Products/Release
-zip -r pinframe.zip pinframe.app
+cd ~/Library/Developer/Xcode/DerivedData/Memoriap-*/Build/Products/Release
+zip -r Memoriap.zip Memoriap.app
 ```
 
-`pinframe.zip`을 친구에게 전송합니다.
+### 3. GitHub Release로 배포
 
-### 3. 친구가 설치하는 방법 — 둘 중 편한 쪽을 선택
+zip을 직접 전송하는 대신, 버전 태그가 붙은 **GitHub Release**에 첨부하면 누구나 나중에 내려받을 수 있습니다.
+
+1. 코드를 GitHub에 push 합니다.
+2. 저장소 페이지 오른쪽의 **Releases** → **Draft a new release** 클릭.
+3. **Choose a tag**를 눌러 `v1.0` 같은 버전을 입력하고 **Create new tag on publish** 선택.
+4. 릴리스 제목(예: `Memoriap 1.0`)과 변경 내용을 작성.
+5. `Memoriap.zip`을 **Attach binaries by dropping them here** 영역에 끌어다 놓기.
+6. **Publish release** 클릭.
+
+이제 zip이 저장소의 **Releases** 페이지에 버전별로 정리되어 올라갑니다. 친구에게는 그 페이지 링크만 보내면, 거기서 `Memoriap.zip`을 내려받습니다.
+
+> 참고: `v*` 태그를 push할 때 자동으로 빌드·첨부하는 GitHub Actions 워크플로로 자동화할 수도 있지만, 서명 인증서 설정이 필요해 친구에게 공유하는 용도라면 수동 업로드가 더 간단합니다.
+
+### 4. 친구가 설치하는 방법 — 둘 중 편한 쪽을 선택
 
 macOS는 알 수 없는 개발자의 앱을 기본적으로 차단합니다(Gatekeeper). 친구는 처음 한 번만 이 제한을 풀어주면 됩니다. 두 가지 방법이 있습니다.
 
 #### 방법 A — 터미널 한 줄 (빠름, 기술 친화적인 친구용)
 
-1. `pinframe.zip` 압축 해제
+1. `Memoriap.zip` 압축 해제
 2. 터미널에서 아래 명령어 실행:
    ```bash
-   xattr -rd com.apple.quarantine ~/Downloads/pinframe.app
+   xattr -rd com.apple.quarantine ~/Downloads/Memoriap.app
    ```
    > 앱을 `~/Downloads/`가 아닌 다른 위치에 풀었다면 경로를 그에 맞게 수정.
-3. `pinframe.app`을 `/Applications` 폴더로 드래그
+3. `Memoriap.app`을 `/Applications` 폴더로 드래그
 4. Applications 또는 Spotlight에서 실행
 
 #### 방법 B — 우클릭 → 열기 (터미널 없이, 일반 사용자용)
 
-1. `pinframe.zip` 압축 해제
-2. `pinframe.app`을 **우클릭(또는 Control+클릭) → 열기**
+1. `Memoriap.zip` 압축 해제
+2. `Memoriap.app`을 **우클릭(또는 Control+클릭) → 열기**
 3. "확인되지 않은 개발자" 경고 다이얼로그에서 **[열기]** 클릭
 4. macOS가 그래도 거부하는 경우(Sequoia 15+에서 흔함):
    - **시스템 설정 → 개인정보 보호 및 보안**
    - **보안** 항목까지 스크롤
-   - pinframe.app 안내 옆의 **[그래도 열기]** 클릭
-5. 정상적으로 실행되면 `pinframe.app`을 `/Applications`로 드래그하여 영구 설치
+   - Memoriap.app 안내 옆의 **[그래도 열기]** 클릭
+5. 정상적으로 실행되면 `Memoriap.app`을 `/Applications`로 드래그하여 영구 설치
 
 한 번 허용된 앱은 이후 더블클릭만으로 정상 실행됩니다.
 
@@ -331,10 +358,10 @@ macOS는 알 수 없는 개발자의 앱을 기본적으로 차단합니다(Gate
 ## 프로젝트 구조
 
 ```
-pinframe/
-├── pinframe.xcodeproj/
-└── pinframe/                      # Swift 소스
-    ├── pinframeApp.swift           # 앱 진입점
+Memoriap/
+├── Memoriap.xcodeproj/
+└── Memoriap/                      # Swift 소스
+    ├── MemoriapApp.swift           # 앱 진입점
     ├── ContentView.swift           # 루트 레이아웃 (3패널 HSplitView) + 키보드 모니터
     ├── SidebarView.swift           # 폴더 트리 + 즐겨찾기
     ├── CenterView.swift            # 사진 표시 + 썸네일 스트립

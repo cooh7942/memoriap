@@ -316,14 +316,22 @@ class PhotoBrowserModel: ObservableObject {
         // ⚠️ 우선순위 .utility는 "결과를 기다리지 않는 백그라운드 작업"용 — 시스템이 다른 일이 있으면 throttling.
         // 사용자가 그 썸네일을 지금 보고 있으므로 .userInitiated가 맞다.
         metadataTask = Task.detached(priority: .userInitiated) { [weak self] in
+            let maxConcurrent = 3   // 동시 생성 상한 (동영상 포화 방지)
             await withTaskGroup(of: (Int, NSImage?, CLLocationCoordinate2D?, Int).self) { group in
-                for (i, url) in urls.enumerated() {
-                    guard !Task.isCancelled else { break }
+                var next = 0
+                let count = urls.count
+
+                // 초기 maxConcurrent 개 투입
+                while next < min(maxConcurrent, count) {
+                    let i = next; next += 1
+                    let url = urls[i]
                     group.addTask {
                         guard !Task.isCancelled else { return (i, nil, nil, 0) }
                         let ext = url.pathExtension.lowercased()
                         let isVideo = ["mov", "mp4", "m4v"].contains(ext)
-                        let thumb = isVideo ? PhotoMetadata.loadVideoThumbnail(from: url) : PhotoMetadata.loadThumbnail(from: url)
+                        let thumb = isVideo
+                            ? await PhotoMetadata.loadVideoThumbnail(from: url)
+                            : PhotoMetadata.loadThumbnail(from: url)
                         let coord = isVideo ? nil : PhotoMetadata.extractGPS(from: url)
                         let rating = isVideo ? 0 : RatingStore.readRating(from: url)
                         return (i, thumb, coord, rating)
@@ -354,12 +362,26 @@ class PhotoBrowserModel: ObservableObject {
                     }
                 }
 
-                for await (i, thumb, coord, rating) in group {
+                // 하나 끝나면 다음 1개 투입 → 동시 개수 maxConcurrent로 일정 유지
+                while let result = await group.next() {
                     guard !Task.isCancelled else { continue }
+                    pending.append(result)
                     done += 1
-                    pending.append((i, thumb, coord, rating))
-                    if pending.count >= batchSize {
-                        await flush(done)
+                    if pending.count >= batchSize { await flush(done) }
+                    if next < count {
+                        let i = next; next += 1
+                        let url = urls[i]
+                        group.addTask {
+                            guard !Task.isCancelled else { return (i, nil, nil, 0) }
+                            let ext = url.pathExtension.lowercased()
+                            let isVideo = ["mov", "mp4", "m4v"].contains(ext)
+                            let thumb = isVideo
+                                ? await PhotoMetadata.loadVideoThumbnail(from: url)
+                                : PhotoMetadata.loadThumbnail(from: url)
+                            let coord = isVideo ? nil : PhotoMetadata.extractGPS(from: url)
+                            let rating = isVideo ? 0 : RatingStore.readRating(from: url)
+                            return (i, thumb, coord, rating)
+                        }
                     }
                 }
                 await flush(done)
@@ -682,17 +704,24 @@ enum PhotoMetadata {
     }
 
     // Extracts a thumbnail from the first available frame; respects track transform for portrait video.
-    nonisolated static func loadVideoThumbnail(from url: URL) -> NSImage? {
+    nonisolated static func loadVideoThumbnail(from url: URL) async -> NSImage? {
         if let cached = thumbnailCache.object(forKey: url as NSURL) { return cached }
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         gen.maximumSize = CGSize(width: 300, height: 300)
+        gen.requestedTimeToleranceBefore = .positiveInfinity
+        gen.requestedTimeToleranceAfter  = .positiveInfinity
         let time = CMTime(seconds: 1, preferredTimescale: 600)
-        guard let cgImage = try? gen.copyCGImage(at: time, actualTime: nil) else { return nil }
-        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-        thumbnailCache.setObject(image, forKey: url as NSURL)
-        return image
+        do {
+            let cg: CGImage = try await gen.image(at: time).image
+            let image = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            thumbnailCache.setObject(image, forKey: url as NSURL)
+            return image
+        } catch {
+            Logger.video.error("video thumbnail 실패: \(url.lastPathComponent, privacy: .public) - \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     /// 파일이 읽을 수 있는 사진/동영상인지 판정. 0바이트이거나 디코딩 불가면 false.

@@ -1,8 +1,6 @@
-너는 코딩을 하지 않고, 프롬프트만 작성.
-프롬프트의 내용에는 아래 내용이 포함.
- - 작업 전에 main branch를 git으로 부터 pull.
- - main로 부터 새로운 브랜치는 생성하라고 해야 함.
- - README.md 파일도 함께 수정해야 함.
- - 나의 리뷰를 기다리고, 리뷰가 되면 commit을 함.
- - commit 메세지도 프롬프트에 포함해서 작성
- - commit 후에는 바로 push 함.
+# Memoriap 작업 규칙
+- 작업 전 main 브랜치를 pull.
+- main에서 새 브랜치를 생성해 작업.
+- 코드 수정 시 README.md도 함께 갱신.
+- 내 리뷰를 기다린 뒤 commit, commit 후 바로 push.
+- commit 메시지는 요약해서 작성.
