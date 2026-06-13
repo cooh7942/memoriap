@@ -61,6 +61,7 @@ class PhotoBrowserModel: ObservableObject {
     @Published var selectedIDs: Set<UUID> = []
     @Published var showCorruptedWarning = false
     @Published var corruptedFileNames: [String] = []
+    @Published var showExifPanel = false
     var selectionAnchor: Int? = nil
 
     // MARK: - Multi-select helpers
@@ -658,6 +659,47 @@ class PhotoBrowserModel: ObservableObject {
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
         folderChanged.send(parent)
     }
+
+    // MARK: - EXIF panel
+
+    /// 우클릭한 사진을 현재 사진으로 만들고 EXIF 패널을 연다.
+    /// 이후 selectedPhoto를 따라 자동 갱신된다(요구사항 4).
+    func showExif(for photo: PhotoItem) {
+        if let idx = photos.firstIndex(where: { $0.id == photo.id }) {
+            selectedIndex = idx
+        }
+        showExifPanel = true
+    }
+
+    // MARK: - Context menu helpers
+
+    private func contextTargets(_ photo: PhotoItem) -> [URL] {
+        if selectedIDs.contains(photo.id) && selectedIDs.count > 1 { return selectedURLs }
+        return [photo.url]
+    }
+
+    func copyFromContext(_ photo: PhotoItem) {
+        let urls = contextTargets(photo)
+        clipboardURLs = urls
+        clipboardMode = .copy
+        writeToSystemPasteboard(urls)
+    }
+
+    func deleteFromContext(_ photo: PhotoItem) {
+        if !(selectedIDs.contains(photo.id) && selectedIDs.count > 1),
+           let idx = photos.firstIndex(where: { $0.id == photo.id }) {
+            click(at: idx)
+        }
+        handleDeleteKeyPress()
+    }
+}
+
+// MARK: - EXIF data model
+
+struct ExifSection: Identifiable {
+    let id = UUID()
+    let title: String
+    let rows: [(label: String, value: String)]
 }
 
 // MARK: - Image utilities (nonisolated — runs on background threads)
@@ -757,6 +799,75 @@ enum PhotoMetadata {
         let coord = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         guard CLLocationCoordinate2DIsValid(coord) else { return nil }
         return coord
+    }
+
+    nonisolated static func readExif(from url: URL) -> [ExifSection] {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] else {
+            var rows: [(label: String, value: String)] = [("파일명", url.lastPathComponent)]
+            if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                rows.append(("파일 크기", ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)))
+            }
+            return [ExifSection(title: "정보 없음", rows: rows)]
+        }
+
+        let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
+        let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+        let gps  = props[kCGImagePropertyGPSDictionary  as String] as? [String: Any] ?? [:]
+
+        func s(_ v: Any?) -> String? { v.map { "\($0)" } }
+
+        var sections: [ExifSection] = []
+
+        // 파일/이미지
+        var fileRows: [(String, String)] = [("파일명", url.lastPathComponent)]
+        if let w = props[kCGImagePropertyPixelWidth as String],
+           let h = props[kCGImagePropertyPixelHeight as String] {
+            fileRows.append(("해상도", "\(w) × \(h)"))
+        }
+        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+            fileRows.append(("파일 크기", ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)))
+        }
+        sections.append(ExifSection(title: "파일", rows: fileRows))
+
+        // 카메라
+        var cam: [(String, String)] = []
+        if let v = s(tiff[kCGImagePropertyTIFFMake as String])  { cam.append(("제조사", v)) }
+        if let v = s(tiff[kCGImagePropertyTIFFModel as String]) { cam.append(("모델", v)) }
+        if let v = s(exif[kCGImagePropertyExifLensModel as String]) { cam.append(("렌즈", v)) }
+        if !cam.isEmpty { sections.append(ExifSection(title: "카메라", rows: cam)) }
+
+        // 촬영 설정
+        var shot: [(String, String)] = []
+        if let v = exif[kCGImagePropertyExifExposureTime as String] as? Double {
+            shot.append(("셔터", "1/\(Int((1/v).rounded()))s"))
+        }
+        if let v = exif[kCGImagePropertyExifFNumber as String] as? Double {
+            shot.append(("조리개", String(format: "f/%.1f", v)))
+        }
+        if let arr = exif[kCGImagePropertyExifISOSpeedRatings as String] as? [Int], let iso = arr.first {
+            shot.append(("ISO", "\(iso)"))
+        }
+        if let v = exif[kCGImagePropertyExifFocalLength as String] as? Double {
+            shot.append(("초점거리", String(format: "%.0fmm", v)))
+        }
+        if let v = s(exif[kCGImagePropertyExifDateTimeOriginal as String]) {
+            shot.append(("촬영일시", v))
+        }
+        if !shot.isEmpty { sections.append(ExifSection(title: "촬영 설정", rows: shot)) }
+
+        // 위치
+        if let lat = gps[kCGImagePropertyGPSLatitude as String],
+           let lon = gps[kCGImagePropertyGPSLongitude as String] {
+            let latRef = gps[kCGImagePropertyGPSLatitudeRef as String] as? String ?? ""
+            let lonRef = gps[kCGImagePropertyGPSLongitudeRef as String] as? String ?? ""
+            sections.append(ExifSection(title: "위치", rows: [
+                ("위도", "\(lat) \(latRef)"),
+                ("경도", "\(lon) \(lonRef)")
+            ]))
+        }
+
+        return sections
     }
 }
 

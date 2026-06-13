@@ -6,16 +6,7 @@ struct CenterView: View {
     @ObservedObject var model: PhotoBrowserModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            PhotoDisplayArea(model: model)
-            Divider()
-            RatingFilterBar(model: model)
-            ThumbnailStrip(model: model)
-                .frame(height: 100)
-        }
-        .onChange(of: model.ratingFilter) { _, _ in
-            model.applyRatingFilter()
-        }
+        PhotoDisplayArea(model: model)
     }
 }
 
@@ -260,6 +251,12 @@ struct ThumbnailStrip: View {
                                 }
                             })
                             .onDrag { NSItemProvider(object: photo.url as NSURL) }
+                            .contextMenu {
+                                Button("삭제", role: .destructive) { model.deleteFromContext(photo) }
+                                Button("복사") { model.copyFromContext(photo) }
+                                Divider()
+                                Button("EXIF 보기") { model.showExif(for: photo) }
+                            }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -365,7 +362,7 @@ struct StarRatingView: View {
 
 // MARK: - Rating filter bar
 
-private struct RatingFilterBar: View {
+struct RatingFilterBar: View {
     @ObservedObject var model: PhotoBrowserModel
 
     var body: some View {
