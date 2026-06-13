@@ -2,7 +2,7 @@
 
 > A macOS photo viewer that lets you browse photos alongside a live map — see exactly where each shot was taken.
 
-![App Icon](pinframe/Assets.xcassets/AppIcon.appiconset/pinframe_128x128.png)
+![App Icon](screenshot.png)
 
 ---
 
