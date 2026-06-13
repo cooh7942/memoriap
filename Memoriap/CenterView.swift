@@ -130,6 +130,20 @@ struct PhotoDisplayArea: View {
 
 // MARK: - Video player
 
+struct PlayerViewRepresentable: NSViewRepresentable {
+    let player: AVPlayer
+    func makeNSView(context: Context) -> AVPlayerView {
+        let v = AVPlayerView()
+        v.player = player
+        v.controlsStyle = .inline
+        v.videoGravity = .resizeAspect
+        return v
+    }
+    func updateNSView(_ v: AVPlayerView, context: Context) {
+        if v.player !== player { v.player = player }
+    }
+}
+
 struct VideoPlayerView: View {
     let url: URL
     @State private var player: AVPlayer?
@@ -138,7 +152,7 @@ struct VideoPlayerView: View {
     var body: some View {
         Group {
             if let player {
-                VideoPlayer(player: player)
+                PlayerViewRepresentable(player: player)
                     .onAppear { player.play() }
             } else {
                 ProgressView().tint(.white)
