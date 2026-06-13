@@ -76,26 +76,28 @@ struct ContentView: View {
 
     private var mainLayout: some View {
         ZStack {
-            VStack(spacing: 0) {
-                // 상단: 3분할 (파일 목록 | 메인 | 지도)
-                HSplitView {
-                    SidebarView(model: model)
-                        .frame(minWidth: 80, idealWidth: 300, maxWidth: 400)
+            HSplitView {
+                // 왼쪽: 파일 목록 — 전체 높이
+                SidebarView(model: model)
+                    .frame(minWidth: 80, idealWidth: 300, maxWidth: 400)
 
-                    CenterView(model: model)
-                        .frame(minWidth: 400)
+                // 오른쪽: 위(메인 | 지도) + 아래(썸네일)
+                VStack(spacing: 0) {
+                    HSplitView {
+                        CenterView(model: model)
+                            .frame(minWidth: 400)
 
-                    PhotoMapView(model: model)
-                        .frame(minWidth: 200, idealWidth: 300, maxWidth: .infinity)
+                        PhotoMapView(model: model)
+                            .frame(minWidth: 200, idealWidth: 300, maxWidth: .infinity)
+                    }
+                    .frame(maxHeight: .infinity)
+
+                    Divider()
+
+                    RatingFilterBar(model: model)
+                    ThumbnailStrip(model: model)
+                        .frame(height: 110)
                 }
-                .frame(maxHeight: .infinity)
-
-                Divider()
-
-                // 하단: 전체 폭 별점 필터 + 썸네일
-                RatingFilterBar(model: model)
-                ThumbnailStrip(model: model)
-                    .frame(height: 110)
             }
             .frame(minWidth: 1100, minHeight: 700)
             .onChange(of: model.ratingFilter) { _, _ in
