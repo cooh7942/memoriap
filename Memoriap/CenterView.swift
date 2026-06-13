@@ -33,6 +33,7 @@ struct PhotoDisplayArea: View {
                     if photo.isVideo {
                         let _ = Logger.video.debug("display video: \(photo.name, privacy: .public)")
                         VideoPlayerView(url: photo.url)
+                            .id(photo.url)
                     } else {
                         PhotoImageView(photo: photo)
                             .onDrag { NSItemProvider(object: photo.url as NSURL) }
@@ -420,6 +421,7 @@ struct FullScreenPhotoView: View {
             if let photo = model.selectedPhoto {
                 if photo.isVideo {
                     VideoPlayerView(url: photo.url)
+                        .id(photo.url)
                 } else {
                     PhotoImageView(photo: photo)
                 }
