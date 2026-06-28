@@ -40,6 +40,14 @@ struct PendingDropOperation: Equatable {
     let destination: URL
 }
 
+struct FileOpProgress: Equatable {
+    enum Kind { case copy, move }
+    let kind: Kind
+    var done: Int
+    var total: Int
+    var currentName: String
+}
+
 @MainActor
 class PhotoBrowserModel: ObservableObject {
     @Published var currentFolderURL: URL?
@@ -58,6 +66,7 @@ class PhotoBrowserModel: ObservableObject {
     @Published var ratingFilter: Set<Int> = []
     @Published var currentFolderBecameUnavailable = false
     @Published var isFullScreen: Bool = false
+    @Published var fileOpProgress: FileOpProgress? = nil
     @Published var selectedIDs: Set<UUID> = []
     @Published var showCorruptedWarning = false
     @Published var corruptedFileNames: [String] = []
@@ -578,26 +587,39 @@ class PhotoBrowserModel: ObservableObject {
     }
 
     func copyFiles(_ urls: [URL], to folder: URL) async throws {
-        try await Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
-            for url in urls {
+        let show = urls.count >= 2
+        if show { fileOpProgress = FileOpProgress(kind: .copy, done: 0, total: urls.count, currentName: "") }
+        defer { if show { fileOpProgress = nil } }
+
+        for (i, url) in urls.enumerated() {
+            if show { fileOpProgress?.currentName = url.lastPathComponent }
+            try await Task.detached(priority: .userInitiated) {
+                let fm = FileManager.default
                 let dst = PhotoBrowserModel.uniqueDestination(url, in: folder)
                 try fm.copyItem(at: url, to: dst)
-            }
-        }.value
+            }.value
+            if show { fileOpProgress?.done = i + 1 }
+        }
     }
 
     func moveFiles(_ urls: [URL], to folder: URL) async throws {
-        try await Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
-            for url in urls {
-                if url.deletingLastPathComponent().standardizedFileURL == folder.standardizedFileURL {
-                    continue
-                }
+        let show = urls.count >= 2
+        if show { fileOpProgress = FileOpProgress(kind: .move, done: 0, total: urls.count, currentName: "") }
+        defer { if show { fileOpProgress = nil } }
+
+        for (i, url) in urls.enumerated() {
+            if url.deletingLastPathComponent().standardizedFileURL == folder.standardizedFileURL {
+                if show { fileOpProgress?.done = i + 1 }
+                continue
+            }
+            if show { fileOpProgress?.currentName = url.lastPathComponent }
+            try await Task.detached(priority: .userInitiated) {
+                let fm = FileManager.default
                 let dst = PhotoBrowserModel.uniqueDestination(url, in: folder)
                 try fm.moveItem(at: url, to: dst)
-            }
-        }.value
+            }.value
+            if show { fileOpProgress?.done = i + 1 }
+        }
     }
 
     // MARK: - Drop confirmation

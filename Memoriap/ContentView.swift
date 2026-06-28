@@ -127,12 +127,22 @@ struct ContentView: View {
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
             }
 
+            if let prog = model.fileOpProgress {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+
+                FileOpProgressDialog(progress: prog)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+
             if model.isFullScreen {
                 FullScreenPhotoView(model: model)
                     .transition(.opacity)
                     .zIndex(2)
             }
         }
+        .animation(.easeInOut(duration: 0.15), value: model.fileOpProgress != nil)
         .animation(.easeInOut(duration: 0.15), value: model.pendingDeletePhoto != nil || model.pendingDropOperation != nil)
         .animation(.easeInOut(duration: 0.15), value: model.isFullScreen)
         .onChange(of: model.pendingDeletePhoto != nil) { _, shown in
@@ -235,6 +245,9 @@ struct ContentView: View {
                 }
             }
 
+            // === 파일 복사/이동 진행 중 ===
+            if model.fileOpProgress != nil { return nil }
+
             // === 복사/이동 다이얼로그 활성 시 ===
             if model.pendingDropOperation != nil {
                 switch event.keyCode {
@@ -303,6 +316,32 @@ struct FolderPickerOnboardingView: View {
         }
         .padding(48)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct FileOpProgressDialog: View {
+    let progress: FileOpProgress
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text(progress.kind == .copy ? "복사 중…" : "이동 중…")
+                .font(.headline)
+
+            ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                .frame(width: 260)
+
+            Text("\(progress.done) / \(progress.total)")
+                .font(.callout).foregroundStyle(.secondary)
+
+            Text(progress.currentName)
+                .font(.caption).foregroundStyle(.secondary)
+                .lineLimit(1).truncationMode(.middle)
+                .frame(width: 260)
+        }
+        .padding(24)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(radius: 12)
     }
 }
 
