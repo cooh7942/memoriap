@@ -6,16 +6,7 @@ struct CenterView: View {
     @ObservedObject var model: PhotoBrowserModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            PhotoDisplayArea(model: model)
-            Divider()
-            RatingFilterBar(model: model)
-            ThumbnailStrip(model: model)
-                .frame(height: 100)
-        }
-        .onChange(of: model.ratingFilter) { _, _ in
-            model.applyRatingFilter()
-        }
+        PhotoDisplayArea(model: model)
     }
 }
 
@@ -130,6 +121,20 @@ struct PhotoDisplayArea: View {
 
 // MARK: - Video player
 
+struct PlayerViewRepresentable: NSViewRepresentable {
+    let player: AVPlayer
+    func makeNSView(context: Context) -> AVPlayerView {
+        let v = AVPlayerView()
+        v.player = player
+        v.controlsStyle = .inline
+        v.videoGravity = .resizeAspect
+        return v
+    }
+    func updateNSView(_ v: AVPlayerView, context: Context) {
+        if v.player !== player { v.player = player }
+    }
+}
+
 struct VideoPlayerView: View {
     let url: URL
     @State private var player: AVPlayer?
@@ -138,7 +143,7 @@ struct VideoPlayerView: View {
     var body: some View {
         Group {
             if let player {
-                VideoPlayer(player: player)
+                PlayerViewRepresentable(player: player)
                     .onAppear { player.play() }
             } else {
                 ProgressView().tint(.white)
@@ -246,6 +251,12 @@ struct ThumbnailStrip: View {
                                 }
                             })
                             .onDrag { NSItemProvider(object: photo.url as NSURL) }
+                            .contextMenu {
+                                Button("삭제", role: .destructive) { model.deleteFromContext(photo) }
+                                Button("복사") { model.copyFromContext(photo) }
+                                Divider()
+                                Button("EXIF 보기") { model.showExif(for: photo) }
+                            }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -351,7 +362,7 @@ struct StarRatingView: View {
 
 // MARK: - Rating filter bar
 
-private struct RatingFilterBar: View {
+struct RatingFilterBar: View {
     @ObservedObject var model: PhotoBrowserModel
 
     var body: some View {

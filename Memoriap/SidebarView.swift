@@ -179,12 +179,8 @@ struct SidebarView: View {
             .onChange(of: model.currentFolderURL) { _, newURL in
                 selection.update(newURL)
                 guard let newURL else { return }
-                let wasInTree = locationsTree.visibleNodes.contains { $0.url == newURL }
                 locationsTree.revealAncestors(of: newURL)
-                let isNowInTree = locationsTree.visibleNodes.contains { $0.url == newURL }
-                if !wasInTree && isNowInTree {
-                    scrollTo(url: newURL, proxy: proxy)
-                }
+                scrollToVisible(url: newURL, proxy: proxy)
             }
             // 시작 시: 마지막 폴더가 복원되면 그 위치까지 트리를 펼치고 스크롤
             .task {
@@ -206,6 +202,16 @@ struct SidebarView: View {
             try? await Task.sleep(nanoseconds: 80_000_000)
             withAnimation(.easeInOut(duration: 0.25)) {
                 proxy.scrollTo(url, anchor: .center)
+            }
+        }
+    }
+
+    /// 선택 행을 화면에 보이도록 최소한으로 스크롤. 이미 보이면 거의 움직이지 않는다.
+    private func scrollToVisible(url: URL, proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            withAnimation(.easeInOut(duration: 0.2)) {
+                proxy.scrollTo(url)
             }
         }
     }
@@ -332,7 +338,11 @@ private struct SidebarTreeList: View {
         // 이름 변경·삭제 후 부모 폴더의 트리 자식 목록을 즉시 갱신
         .onReceive(model.folderChanged) { parent in
             HasChildrenCache.invalidate(parent)
-            tree.reloadChildren(of: parent)
+            if tree.isExpanded(parent) {
+                tree.reloadChildren(of: parent)
+            } else {
+                tree.expand(parent)
+            }
         }
     }
 
@@ -584,6 +594,11 @@ struct FlatFolderRow: View {
             }
             Button("즐겨찾기에 추가") {
                 model.addCustomFavorite(url: url)
+            }
+            Divider()
+            Button("새로 고침") {
+                HasChildrenCache.invalidate(url)
+                model.folderChanged.send(url)
             }
             Divider()
             Button("새 폴더 만들기") {

@@ -77,16 +77,32 @@ struct ContentView: View {
     private var mainLayout: some View {
         ZStack {
             HSplitView {
+                // 왼쪽: 파일 목록 — 전체 높이
                 SidebarView(model: model)
                     .frame(minWidth: 80, idealWidth: 300, maxWidth: 400)
 
-                CenterView(model: model)
-                    .frame(minWidth: 800)
+                // 오른쪽: 위(메인 | 지도) + 아래(썸네일)
+                VStack(spacing: 0) {
+                    HSplitView {
+                        CenterView(model: model)
+                            .frame(minWidth: 400)
 
-                PhotoMapView(model: model)
-                    .frame(minWidth: 200, idealWidth: 300, maxWidth: .infinity)
+                        PhotoMapView(model: model)
+                            .frame(minWidth: 200, idealWidth: 300, maxWidth: .infinity)
+                    }
+                    .frame(maxHeight: .infinity)
+
+                    Divider()
+
+                    RatingFilterBar(model: model)
+                    ThumbnailStrip(model: model)
+                        .frame(height: 110)
+                }
             }
             .frame(minWidth: 1100, minHeight: 700)
+            .onChange(of: model.ratingFilter) { _, _ in
+                model.applyRatingFilter()
+            }
 
             if model.pendingDeletePhoto != nil {
                 Color.black.opacity(0.35)
@@ -145,6 +161,15 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.15), value: model.fileOpProgress != nil)
         .animation(.easeInOut(duration: 0.15), value: model.pendingDeletePhoto != nil || model.pendingDropOperation != nil)
         .animation(.easeInOut(duration: 0.15), value: model.isFullScreen)
+        .overlay(alignment: .topTrailing) {
+            if model.showExifPanel {
+                ExifPanel(model: model)
+                    .frame(width: 300)
+                    .padding(12)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.showExifPanel)
         .onChange(of: model.pendingDeletePhoto != nil) { _, shown in
             if shown { model.deleteDialogFocus = .trash }
         }
@@ -293,6 +318,65 @@ struct ContentView: View {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
+        }
+    }
+}
+
+// MARK: - EXIF floating panel
+
+struct ExifPanel: View {
+    @ObservedObject var model: PhotoBrowserModel
+    @State private var sections: [ExifSection] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(model.selectedPhoto?.name ?? "EXIF")
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+                Button { model.showExifPanel = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.bottom, 8)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(sections) { sec in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(sec.title)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            ForEach(sec.rows, id: \.label) { row in
+                                HStack(alignment: .top) {
+                                    Text(row.label)
+                                        .frame(width: 80, alignment: .leading)
+                                        .foregroundColor(.secondary)
+                                    Text(row.value)
+                                        .textSelection(.enabled)
+                                    Spacer()
+                                }
+                                .font(.callout)
+                            }
+                        }
+                    }
+                    if sections.isEmpty {
+                        Text("EXIF 정보가 없습니다.")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(radius: 8)
+        .task(id: model.selectedPhoto?.url) {
+            guard let url = model.selectedPhoto?.url else { sections = []; return }
+            sections = await Task.detached { PhotoMetadata.readExif(from: url) }.value
         }
     }
 }
