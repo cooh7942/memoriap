@@ -231,6 +231,15 @@ struct ContentView: View {
                 }
             }
 
+            // === Shift + ←/→ : 범위 선택 ===
+            if mods == .shift {
+                switch event.keyCode {
+                case 123: model.extendSelection(by: -1); return nil   // ←
+                case 124: model.extendSelection(by: +1); return nil   // →
+                default:  return event
+                }
+            }
+
             // 나머지 modifier 조합(⌥, ⌃, ⌘⌥ 등)은 통과
             if !mods.isEmpty { return event }
 
