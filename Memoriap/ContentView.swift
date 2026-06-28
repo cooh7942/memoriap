@@ -72,6 +72,19 @@ struct ContentView: View {
                      + model.corruptedFileNames.map { "• \($0)" }.joined(separator: "\n"))
             }
         }
+        // 휴지통 없는 볼륨 영구 삭제 확인
+        .alert(
+            "영구 삭제하시겠습니까?",
+            isPresented: Binding(
+                get: { !model.pendingPermanentDeleteURLs.isEmpty },
+                set: { if !$0 { model.cancelPermanentDelete() } }
+            )
+        ) {
+            Button("영구 삭제", role: .destructive) { model.confirmPermanentDelete() }
+            Button("취소", role: .cancel) { model.cancelPermanentDelete() }
+        } message: {
+            Text("이 볼륨에는 휴지통이 없어 휴지통으로 이동할 수 없습니다.\n\(model.pendingPermanentDeleteURLs.count)개 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+        }
     }
 
     private var mainLayout: some View {
