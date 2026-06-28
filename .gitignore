@@ -1,0 +1,21 @@
+# Release 산출물 (zip 등 바이너리는 커밋하지 않음 — GitHub Release 자산으로 배포)
+release/
+
+# Cowork가 만든 작업 프롬프트 문서 (repo에 커밋하지 않음)
+*PROMPT.md
+
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+**/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# IDE
+.idea/
