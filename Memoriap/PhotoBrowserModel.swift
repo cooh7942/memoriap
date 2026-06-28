@@ -119,6 +119,22 @@ class PhotoBrowserModel: ObservableObject {
         selectedIndex = index
     }
 
+    /// Shift+←/→: 앵커를 기준으로 선택 범위를 delta 방향으로 확장/축소
+    func extendSelection(by delta: Int) {
+        guard !photos.isEmpty else { return }
+        let cur = selectedIndex ?? 0
+        if selectionAnchor == nil { selectionAnchor = cur }
+        let next = max(0, min(photos.count - 1, cur + delta))
+        selectedIndex = next
+        let lo = min(selectionAnchor!, next), hi = max(selectionAnchor!, next)
+        selectedIDs = Set(photos[lo...hi].map { $0.id })
+    }
+
+    /// 선택된 사진들을 photos 순서대로 반환 (겹쳐보기 렌더용)
+    var selectedPhotosInOrder: [PhotoItem] {
+        photos.filter { selectedIDs.contains($0.id) }
+    }
+
     func enterFullScreen() {
         pendingDeletePhoto = nil
         pendingDropOperation = nil

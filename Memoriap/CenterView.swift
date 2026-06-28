@@ -19,7 +19,9 @@ struct PhotoDisplayArea: View {
         ZStack {
             Color(red: 0.1, green: 0.1, blue: 0.1)
 
-            if let photo = model.selectedPhoto {
+            if model.selectedIDs.count > 1 {
+                StackedPhotosView(photos: model.selectedPhotosInOrder, topID: model.selectedPhoto?.id)
+            } else if let photo = model.selectedPhoto {
                 Group {
                     if photo.isVideo {
                         let _ = Logger.video.debug("display video: \(photo.name, privacy: .public)")
@@ -73,7 +75,7 @@ struct PhotoDisplayArea: View {
                 VStack {
                     Spacer()
                     HStack {
-                        Text(photo.name)
+                        Text(model.selectedIDs.count > 1 ? "\(model.selectedIDs.count)장 선택됨" : photo.name)
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.8))
                             .padding(.horizontal, 8)
@@ -455,5 +457,50 @@ struct FullScreenPhotoView: View {
             }
         }
         .onTapGesture(count: 2) { model.isFullScreen = false }
+    }
+}
+
+// MARK: - Stacked Photos View
+
+struct StackedPhotosView: View {
+    let photos: [PhotoItem]
+    let topID: UUID?
+    private let maxCards = 12
+
+    var body: some View {
+        let shown = Array(photos.suffix(maxCards))
+        ZStack {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { idx, photo in
+                card(photo)
+                    .rotationEffect(.degrees(jitter(idx).angle))
+                    .offset(x: jitter(idx).dx, y: jitter(idx).dy)
+                    .zIndex(photo.id == topID ? 1000 : Double(idx))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
+        .animation(.easeInOut(duration: 0.15), value: photos.map(\.id))
+    }
+
+    @ViewBuilder private func card(_ photo: PhotoItem) -> some View {
+        Group {
+            if let thumb = photo.thumbnail {
+                Image(nsImage: thumb).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+            } else {
+                Color.gray.opacity(0.2)
+            }
+        }
+        .frame(maxWidth: 400, maxHeight: 400)
+        .padding(6)
+        .background(Color.white)
+        .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 3)
+    }
+
+    private func jitter(_ i: Int) -> (angle: Double, dx: CGFloat, dy: CGFloat) {
+        func rnd(_ s: Double) -> Double { let v = sin(s) * 43758.5453; return v - floor(v) }
+        let angle = (rnd(Double(i) * 12.9898) - 0.5) * 16
+        let dx = CGFloat((rnd(Double(i) * 78.233) - 0.5) * 80)
+        let dy = CGFloat((rnd(Double(i) * 37.719) - 0.5) * 60)
+        return (angle, dx, dy)
     }
 }
