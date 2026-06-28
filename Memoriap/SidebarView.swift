@@ -338,7 +338,11 @@ private struct SidebarTreeList: View {
         // 이름 변경·삭제 후 부모 폴더의 트리 자식 목록을 즉시 갱신
         .onReceive(model.folderChanged) { parent in
             HasChildrenCache.invalidate(parent)
-            tree.reloadChildren(of: parent)
+            if tree.isExpanded(parent) {
+                tree.reloadChildren(of: parent)
+            } else {
+                tree.expand(parent)
+            }
         }
     }
 
