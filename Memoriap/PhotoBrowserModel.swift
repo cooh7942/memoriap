@@ -57,6 +57,7 @@ class PhotoBrowserModel: ObservableObject {
     @Published var isLoadingMetadata = false
     @Published var loadProgress: (done: Int, total: Int) = (0, 0)
     @Published var pendingDeletePhoto: PhotoItem? = nil
+    @Published var pendingPermanentDeleteURLs: [URL] = []
     @Published var deleteDialogFocus: DeleteConfirmChoice = .trash
     @Published var clipboardURLs: [URL] = []
     @Published var clipboardMode: ClipboardMode = .copy
@@ -530,21 +531,68 @@ class PhotoBrowserModel: ObservableObject {
     func performDeleteSelectedPhoto() {
         let urls = selectedURLs
         guard !urls.isEmpty else { pendingDeletePhoto = nil; return }
-        let idsToDelete = selectedIDs.isEmpty
-            ? Set(urls.compactMap { u in photos.first(where: { $0.url == u })?.id })
-            : selectedIDs
+
+        var trashed: [URL] = []
+        var needsPermanent: [URL] = []
+        var firstError: Error?
+
+        for url in urls {
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                trashed.append(url)
+            } catch {
+                if Self.isTrashUnsupported(error, url: url) {
+                    needsPermanent.append(url)
+                } else if firstError == nil {
+                    firstError = error
+                }
+            }
+        }
+
+        removeFromList(trashed)
+        if let err = firstError { lastError = "삭제 실패: \(err.localizedDescription)" }
+        pendingDeletePhoto = nil
+        if !needsPermanent.isEmpty {
+            pendingPermanentDeleteURLs = needsPermanent
+        }
+    }
+
+    func confirmPermanentDelete() {
+        let urls = pendingPermanentDeleteURLs
+        pendingPermanentDeleteURLs = []
+        var deleted: [URL] = []
         var firstError: Error?
         for url in urls {
-            do { try FileManager.default.trashItem(at: url, resultingItemURL: nil) }
+            do { try FileManager.default.removeItem(at: url); deleted.append(url) }
             catch { if firstError == nil { firstError = error } }
         }
-        if let err = firstError { lastError = "삭제 실패: \(err.localizedDescription)" }
+        removeFromList(deleted)
+        if let err = firstError { lastError = "영구 삭제 실패: \(err.localizedDescription)" }
+    }
+
+    func cancelPermanentDelete() {
+        pendingPermanentDeleteURLs = []
+    }
+
+    private static func isTrashUnsupported(_ error: Error, url: URL) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSCocoaErrorDomain && ns.code == NSFeatureUnsupportedError { return true }
+        if let local = try? url.resourceValues(forKeys: [.volumeIsLocalKey]).volumeIsLocal, local == false {
+            return true
+        }
+        return false
+    }
+
+    private func removeFromList(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        let set = Set(urls.map { $0.standardizedFileURL })
+        let removedIDs = Set(photos.filter { set.contains($0.url.standardizedFileURL) }.map { $0.id })
+        guard !removedIDs.isEmpty else { return }
         let prevIdx = selectedIndex ?? 0
-        photos.removeAll { idsToDelete.contains($0.id) }
-        selectedIDs.removeAll()
+        photos.removeAll { removedIDs.contains($0.id) }
+        selectedIDs.subtract(removedIDs)
         selectedIndex = photos.isEmpty ? nil : min(prevIdx, photos.count - 1)
         if let idx = selectedIndex { selectionAnchor = idx }
-        pendingDeletePhoto = nil
     }
 
     // MARK: - Clipboard
