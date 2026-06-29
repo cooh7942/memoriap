@@ -33,13 +33,7 @@ struct PhotoDisplayArea: View {
                     }
                 }
                 .onTapGesture(count: 2) { model.enterFullScreen() }
-            } else if model.isLoadingFiles {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("사진 목록 불러오는 중...")
-                        .foregroundColor(.secondary)
-                }
-            } else {
+            } else if !model.isLoadingFiles {
                 VStack(spacing: 16) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 64))
@@ -47,6 +41,22 @@ struct PhotoDisplayArea: View {
                     Text(model.currentFolderURL == nil ? "좌측에서 폴더를 선택하세요" : "이 폴더에 사진이 없습니다")
                         .foregroundColor(.secondary)
                 }
+            }
+
+            // 폴더 스캔 중 로딩 표시 — 콘텐츠 위에 항상 오버레이
+            if model.isLoadingFiles {
+                ZStack {
+                    Color.black.opacity(0.25).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("사진 목록 불러오는 중...")
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                    .padding(20)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .transition(.opacity)
             }
 
             // 우측 상단 전체 화면 아이콘
