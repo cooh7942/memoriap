@@ -133,16 +133,48 @@ struct PhotoDisplayArea: View {
 
 // MARK: - Video player
 
+/// AVPlayerLayer를 백킹 레이어로 직접 소유해 contentsScale을 처음부터 제어,
+/// Retina 초기 흐림을 방지한다. AVPlayerView 내부 레이어는 지연 생성·자체 관리되어
+/// 서브클래스에서 contentsScale을 심어도 덮여쓰이므로 이 방식을 사용한다.
+final class PlayerLayerNSView: NSView {
+    private let playerLayer = AVPlayerLayer()
+
+    init(player: AVPlayer) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer = playerLayer
+        playerLayer.videoGravity = .resizeAspect
+        playerLayer.player = player
+        applyScale()
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    var player: AVPlayer? {
+        get { playerLayer.player }
+        set { playerLayer.player = newValue }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyScale()
+    }
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        applyScale()
+    }
+
+    private func applyScale() {
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        playerLayer.contentsScale = scale
+    }
+}
+
 struct PlayerViewRepresentable: NSViewRepresentable {
     let player: AVPlayer
-    func makeNSView(context: Context) -> AVPlayerView {
-        let v = AVPlayerView()
-        v.player = player
-        v.controlsStyle = .inline
-        v.videoGravity = .resizeAspect
-        return v
+    func makeNSView(context: Context) -> PlayerLayerNSView {
+        PlayerLayerNSView(player: player)
     }
-    func updateNSView(_ v: AVPlayerView, context: Context) {
+    func updateNSView(_ v: PlayerLayerNSView, context: Context) {
         if v.player !== player { v.player = player }
     }
 }
