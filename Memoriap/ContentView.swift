@@ -234,12 +234,18 @@ struct ContentView: View {
 
             let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
 
-            // === ⌘C / ⌘X / ⌘V — Cmd 단독 조합만 가로챔 ===
+            // === ⌘C / ⌘X / ⌘V / ⌘0~⌘5 — Cmd 단독 조합만 가로챔 ===
             if mods == .command {
                 switch event.keyCode {
                 case 8: model.copySelectedPhoto(); return nil          // ⌘C
                 case 7: model.cutSelectedPhoto(); return nil           // ⌘X
                 case 9: Task { await model.pasteIntoCurrentFolder() }; return nil  // ⌘V
+                case 18: model.toggleExactRatingFilter(1); return nil  // ⌘1
+                case 19: model.toggleExactRatingFilter(2); return nil  // ⌘2
+                case 20: model.toggleExactRatingFilter(3); return nil  // ⌘3
+                case 21: model.toggleExactRatingFilter(4); return nil  // ⌘4
+                case 23: model.toggleExactRatingFilter(5); return nil  // ⌘5
+                case 29: model.toggleExactRatingFilter(0); return nil  // ⌘0 → 전체
                 default: return event  // ⌘W, ⌘Q 등은 통과
                 }
             }
@@ -330,6 +336,12 @@ struct ContentView: View {
             case 51, 117:   // Delete, Forward Delete
                 model.handleDeleteKeyPress()
                 return nil
+            case 18: model.rateSelection(1); return nil   // 1
+            case 19: model.rateSelection(2); return nil   // 2
+            case 20: model.rateSelection(3); return nil   // 3
+            case 21: model.rateSelection(4); return nil   // 4
+            case 23: model.rateSelection(5); return nil   // 5
+            case 29: model.rateSelection(0); return nil   // 0 → 별점 해제
             default:
                 return event
             }

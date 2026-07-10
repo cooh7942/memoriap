@@ -195,6 +195,27 @@ class PhotoBrowserModel: ObservableObject {
         }
     }
 
+    /// 숫자키: 현재 선택(다중이면 전체)에 별점 부여. 0이면 해제.
+    func rateSelection(_ value: Int) {
+        let targets: [PhotoItem] = selectedIDs.isEmpty
+            ? (selectedPhoto.map { [$0] } ?? [])
+            : photos.filter { selectedIDs.contains($0.id) }
+        for p in targets { setRating(value, for: p) }
+    }
+
+    /// ⌘+숫자: 정확히 value점만 보기(토글). 이미 같은 필터면 해제. 0이면 전체.
+    func toggleExactRatingFilter(_ value: Int) {
+        if value == 0 { ratingFilter = [] }
+        else if ratingFilter == [value] { ratingFilter = [] }
+        else { ratingFilter = [value] }
+    }
+
+    /// 현재 폴더 다시 읽기(썸네일 새로고침)
+    func reloadCurrentFolder() {
+        guard let url = currentFolderURL else { return }
+        Task { await loadFolder(url: url) }
+    }
+
     private let lastFolderPathKey = "lastFolderPath"
     private var metadataTask: Task<Void, Never>?
 
