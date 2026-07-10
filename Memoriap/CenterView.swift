@@ -268,6 +268,8 @@ struct ThumbnailStrip: View {
                                 Button("복사") { model.copyFromContext(photo) }
                                 Divider()
                                 Button("EXIF 보기") { model.showExif(for: photo) }
+                                Divider()
+                                Button("새로고침") { model.reloadCurrentFolder() }
                             }
                     }
                 }
