@@ -84,45 +84,29 @@ struct PhotoDisplayArea: View {
             if let photo = model.selectedPhoto {
                 VStack {
                     Spacer()
-                    HStack {
+                    HStack(spacing: Theme.s3) {
                         Text(model.selectedIDs.count > 1 ? "\(model.selectedIDs.count)장 선택됨" : photo.name)
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1).truncationMode(.middle)
                         StarRatingView(rating: photo.rating) { newRating in
                             model.setRating(newRating, for: photo)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                         Spacer()
-                        // High #6: 메타데이터 로딩 진행 표시
                         if model.isLoadingMetadata {
                             HStack(spacing: 6) {
-                                ProgressView()
-                                    .scaleEffect(0.6)
+                                ProgressView().scaleEffect(0.6)
                                 Text("\(model.loadProgress.done)/\(model.loadProgress.total)")
-                                    .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .font(.caption2).foregroundStyle(.white.opacity(0.6))
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                         Text("\((model.selectedIndex ?? 0) + 1) / \(model.photos.count)")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .font(.caption).foregroundStyle(.white.opacity(0.7))
                     }
-                    .padding(10)
+                    .padding(.horizontal, Theme.s3)
+                    .padding(.vertical, Theme.s2)
+                    .background(Theme.overlayBG, in: RoundedRectangle(cornerRadius: Theme.radius))
+                    .padding(Theme.s3)
                 }
             }
         }
@@ -277,7 +261,7 @@ struct ThumbnailStrip: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: true) {
-                LazyHStack(spacing: 4) {
+                LazyHStack(spacing: Theme.s1) {
                     ForEach(model.visiblePhotos, id: \.id) { photo in
                         ThumbnailCell(photo: photo, isSelected: model.selectedIDs.contains(photo.id))
                             .id(photo.id)
@@ -306,7 +290,7 @@ struct ThumbnailStrip: View {
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 10)
+                .padding(.vertical, Theme.s1)
                 // ⚠️ LazyHStack에 .id(currentFolderURL)을 걸어 강제 재생성하지 않는다.
                 // 각 셀이 .id(photo.id)로 식별되므로 ForEach가 자연스럽게 diff한다.
                 // 강제 재생성은 폴더 전환 시 LazyHStack 전체가 깜빡이는 원인이었다.
@@ -346,10 +330,10 @@ struct ThumbnailCell: View {
             }
         }
         .frame(width: 80, height: 80)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2.5)
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
         )
         .overlay(alignment: .center) {
             if photo.isVideo {
@@ -365,7 +349,7 @@ struct ThumbnailCell: View {
                 HStack(spacing: 1) {
                     ForEach(1...photo.rating, id: \.self) { _ in
                         Image(systemName: "star.fill")
-                            .font(.system(size: 5))
+                            .font(.system(size: 8))
                             .foregroundColor(.yellow)
                     }
                 }
@@ -377,7 +361,7 @@ struct ThumbnailCell: View {
                 .allowsHitTesting(false)
             }
         }
-        .scaleEffect(isSelected ? 1.05 : 1.0)
+        .scaleEffect(isSelected ? 1.03 : 1.0)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 }
@@ -412,7 +396,7 @@ struct RatingFilterBar: View {
     @ObservedObject var model: PhotoBrowserModel
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.s1) {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
@@ -427,9 +411,11 @@ struct RatingFilterBar: View {
                     .foregroundColor(.secondary)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color(red: 0.13, green: 0.13, blue: 0.13))
+        .padding(.horizontal, Theme.s3)
+        .padding(.vertical, Theme.s1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.panelBG)
+        .overlay(Rectangle().fill(Theme.hairline).frame(height: 1), alignment: .top)
     }
 
     private var clearButton: some View {

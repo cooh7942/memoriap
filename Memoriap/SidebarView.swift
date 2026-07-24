@@ -477,7 +477,7 @@ struct FlatFolderRow: View {
                     .frame(width: 16, height: 16)
 
                 Text(displayName)
-                    .foregroundColor(isSelected ? .accentColor : .primary)
+                    .foregroundColor(.primary)
                     .fontWeight(isSelected ? .semibold : .regular)
                     .lineLimit(1)
                     .truncationMode(.tail)
