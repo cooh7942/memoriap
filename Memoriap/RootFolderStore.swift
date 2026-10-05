@@ -29,64 +29,98 @@ final class RootFolderStore: ObservableObject {
     /// 복원 실패한 북마크는 UserDefaults에 보존 — 디스크 재연결 시 복원 가능.
     /// 두 번 이상 호출되어도 기존 access를 끊지 않는다.
     @discardableResult
-    func bootstrapOnLaunch() -> Bool {
+    func bootstrapOnLaunch() async -> Bool {
         guard accessingURLs.isEmpty else { return !roots.isEmpty }
-        rebuildRootsFromSavedBookmarks()
+        await rebuildRootsFromSavedBookmarks()
         return !roots.isEmpty
     }
 
     /// 외장 디스크가 다시 마운트됐거나 사용자가 재시도할 때 호출.
     /// UserDefaults 데이터는 그대로 두고 런타임 roots만 재계산한다.
-    func retryUnavailable() {
-        rebuildRootsFromSavedBookmarks()
+    func retryUnavailable() async {
+        await rebuildRootsFromSavedBookmarks()
     }
 
     // MARK: - 핵심 복원 로직
 
-    private func rebuildRootsFromSavedBookmarks() {
+    private struct ProbeResult: Sendable {
+        let url: URL?
+        let accessible: Bool
+        let startedAccess: Bool
+        let freshBookmark: Data?
+    }
+
+    private var isRebuilding = false
+    private var needsRebuild = false
+
+    private func rebuildRootsFromSavedBookmarks() async {
+        // 복원 중에 마운트 알림 등으로 다시 불리면 끝난 뒤 한 번 더 돌린다 (동시 실행 방지).
+        guard !isRebuilding else { needsRebuild = true; return }
+        isRebuilding = true
+        defer { isRebuilding = false }
+        repeat {
+            needsRebuild = false
+            await rebuildOnce()
+        } while needsRebuild
+    }
+
+    private func rebuildOnce() async {
+        let bookmarks = savedBookmarks
+        let alreadyAccessing = Set(accessingURLs)
+
+        // 북마크 해석·존재 확인은 연결이 끊긴 네트워크 드라이브에서 멈출 수 있으므로
+        // 메인 스레드 밖에서, 북마크별로 병렬·타임아웃 적용해 실행한다.
+        let results: [Int: ProbeResult] = await withTaskGroup(of: (Int, ProbeResult?).self) { group in
+            for (i, data) in bookmarks.enumerated() {
+                group.addTask {
+                    let result = await FileProbe.run({
+                        Self.probe(bookmark: data, alreadyAccessing: alreadyAccessing)
+                    }, onLateResult: { late in
+                        // 시간 초과 후에 뒤늦게 access를 얻었다면 반납
+                        if late.startedAccess { late.url?.stopAccessingSecurityScopedResource() }
+                    })
+                    return (i, result)
+                }
+            }
+            var collected: [Int: ProbeResult] = [:]
+            for await (i, result) in group {
+                if let result { collected[i] = result }
+            }
+            return collected
+        }
+
         var valid: [URL] = []
         var unavailable: [String] = []
         var newAccessingURLs: [URL] = []
 
-        for i in 0..<savedBookmarks.count {
-            let data = savedBookmarks[i]
-            var isStale = false
-            do {
-                let url = try URL(
-                    resolvingBookmarkData: data,
-                    options: .withSecurityScope,
-                    relativeTo: nil,
-                    bookmarkDataIsStale: &isStale
-                )
-                // 이미 access 중이면 재호출하지 않음
-                if accessingURLs.contains(url) {
-                    valid.append(url)
-                    newAccessingURLs.append(url)
-                    continue
-                }
-                guard url.startAccessingSecurityScopedResource() else {
-                    unavailable.append(url.lastPathComponent)
-                    continue
-                }
-                var isDir: ObjCBool = false
-                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
-                      isDir.boolValue else {
-                    url.stopAccessingSecurityScopedResource()
-                    unavailable.append(url.lastPathComponent)
-                    continue
-                }
-                newAccessingURLs.append(url)
-                valid.append(url)
-                // stale이면 북마크만 갱신 (영구 삭제 아님 — 같은 폴더의 새 형태)
-                if isStale, let fresh = try? url.bookmarkData(options: .withSecurityScope) {
-                    savedBookmarks[i] = fresh
-                }
-            } catch {
+        for (i, data) in bookmarks.enumerated() {
+            guard let result = results[i] else {
+                // 시간 초과 — 응답 없는 네트워크 드라이브 등
+                unavailable.append(Self.displayName(ofBookmark: data))
+                continue
+            }
+            guard let url = result.url else {
                 // 북마크 자체를 못 풀면 이름을 알 수 없음 — UserDefaults는 보존
-                unavailable.append("(알 수 없는 폴더)")
+                unavailable.append(Self.displayName(ofBookmark: data))
+                continue
+            }
+            guard result.accessible else {
+                unavailable.append(url.lastPathComponent)
+                continue
+            }
+            newAccessingURLs.append(url)
+            valid.append(url)
+            // stale이면 북마크만 갱신 (영구 삭제 아님 — 같은 폴더의 새 형태)
+            if let fresh = result.freshBookmark, i < savedBookmarks.count, savedBookmarks[i] == data {
+                savedBookmarks[i] = fresh
             }
         }
 
+        // 복원하는 동안 사용자가 add()로 추가한 루트는 유지
+        for url in accessingURLs where !alreadyAccessing.contains(url) && !newAccessingURLs.contains(url) {
+            newAccessingURLs.append(url)
+            valid.append(url)
+        }
         // 기존에 access 중이었지만 새 목록에 없는 것은 정리
         for old in accessingURLs where !newAccessingURLs.contains(old) {
             old.stopAccessingSecurityScopedResource()
@@ -96,6 +130,40 @@ final class RootFolderStore: ObservableObject {
         unavailableNames = unavailable
         // stale 갱신이 있었을 수 있으므로 UserDefaults와 동기화 (삭제 없음)
         UserDefaults.standard.set(savedBookmarks, forKey: defaultsKey)
+    }
+
+    /// 백그라운드 스레드에서 실행 — 북마크 해석, access 시작, 디렉터리 존재 확인.
+    nonisolated private static func probe(bookmark data: Data, alreadyAccessing: Set<URL>) -> ProbeResult {
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: data,
+            // 마운트되지 않은 네트워크 볼륨을 자동으로 마운트하려다 멈추지 않도록
+            options: [.withSecurityScope, .withoutMounting],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            return ProbeResult(url: nil, accessible: false, startedAccess: false, freshBookmark: nil)
+        }
+        // 이미 access 중이면 재호출하지 않음
+        if alreadyAccessing.contains(url) {
+            return ProbeResult(url: url, accessible: true, startedAccess: false, freshBookmark: nil)
+        }
+        guard url.startAccessingSecurityScopedResource() else {
+            return ProbeResult(url: url, accessible: false, startedAccess: false, freshBookmark: nil)
+        }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
+            url.stopAccessingSecurityScopedResource()
+            return ProbeResult(url: url, accessible: false, startedAccess: false, freshBookmark: nil)
+        }
+        let fresh = isStale ? try? url.bookmarkData(options: .withSecurityScope) : nil
+        return ProbeResult(url: url, accessible: true, startedAccess: true, freshBookmark: fresh)
+    }
+
+    /// 북마크 데이터에 저장된 폴더 이름 (파일 시스템 접근 없음).
+    nonisolated private static func displayName(ofBookmark data: Data) -> String {
+        let values = URL.resourceValues(forKeys: [.nameKey], fromBookmarkData: data)
+        return values?.name ?? "(알 수 없는 폴더)"
     }
 
     // MARK: - 폴더 추가 (NSOpenPanel 결과)

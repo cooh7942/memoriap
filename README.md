@@ -27,7 +27,7 @@
 - **Folder operations** — Right-click any folder in the sidebar to rename it, move it to trash, or add/remove it from Favorites
 - **Favorites** — Right-click a folder → Add to Favorites; right-click a favorite → Remove from Favorites
 - **Persistent session** — Remembers the last open folder across launches via Security-Scoped Bookmarks
-- **External drive handling** — Alert shown when a connected drive is unmounted; bookmarks are auto-restored when the drive is reconnected
+- **External drive handling** — Alert shown when a connected drive is unmounted; bookmarks are auto-restored when the drive is reconnected. Unreachable network drives (SMB/AFP) no longer freeze the app: file-system checks run off the main thread with a timeout, and favorites on a disconnected drive are kept in the list
 - **New folder** — Right-click any folder in the sidebar → "새 폴더 만들기" to create a subfolder; the tree updates immediately
 - **Video playback** — Play iPhone (.mov) and Android (.mp4) videos in the center panel with native AVKit controls; first-frame thumbnails with a play badge appear in the strip; concurrent thumbnail generation is rate-limited to prevent resource exhaustion with large video folders
 - **Star rating** — Rate each photo 1–5 stars in the status bar (click same star to clear); saved as Lightroom-compatible XMP `xmp:Rating` metadata — embedded for JPEG/HEIC, sidecar `.xmp` for other formats
@@ -180,6 +180,7 @@ Memoriap/
     ├── PhotoMapView.swift          # MapKit map with GPS pins
     ├── PhotoBrowserModel.swift     # Central state, photo loading, clipboard & file ops
     ├── RootFolderStore.swift       # Security-Scoped Bookmark management
+    ├── FileProbe.swift             # Timeout wrapper for file-system calls (unreachable network drives)
     ├── DeleteConfirmDialog.swift   # Trash confirmation overlay
     ├── CopyMoveConfirmDialog.swift # Copy / Move confirmation overlay (drag-and-drop)
     ├── RatingStore.swift           # XMP rating read/write (embedded + sidecar)
@@ -222,7 +223,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 - **폴더 작업** — 사이드바 폴더 우클릭으로 이름 변경, 휴지통 이동, 즐겨찾기 추가/제거 가능
 - **즐겨찾기** — 폴더 우클릭 → 즐겨찾기에 추가 / 즐겨찾기에서 제거
 - **세션 복원** — Security-Scoped Bookmark로 마지막 폴더를 재실행 후에도 복원
-- **외장 디스크 처리** — 디스크 분리 시 알림 표시, 재연결 시 북마크 자동 복원
+- **외장 디스크 처리** — 디스크 분리 시 알림 표시, 재연결 시 북마크 자동 복원. 연결할 수 없는 네트워크 드라이브(SMB/AFP)가 있어도 앱이 멈추지 않음 — 파일 시스템 확인을 백그라운드에서 타임아웃과 함께 실행하며, 끊긴 드라이브의 즐겨찾기도 목록에서 사라지지 않음
 - **동영상 재생** — 네이티브 AVKit 컨트롤로 iPhone(.mov) 및 Android(.mp4) 동영상을 센터 패널에서 재생; 썸네일 스트립에 첫 프레임 + 재생 배지 표시; 동영상이 많은 폴더에서도 썸네일 동시 생성 수를 제한해 안정적으로 동작
 - **별점** — 상태바에서 사진별 1~5 별점 부여 (같은 별 재클릭 시 해제); Lightroom 호환 XMP `xmp:Rating` 메타데이터로 저장 — JPEG/HEIC는 파일 내 임베드, 기타 포맷은 `.xmp` 사이드카 생성
 - **별점 필터** — 다중 선택 정확히 일치 필터: 1~5 중 하나 이상 선택 시 해당 별점 사진만 표시(이상 ❌); 전체 해제 시 전체 목록 복원. 필터 바는 항상 표시
@@ -368,6 +369,7 @@ Memoriap/
     ├── PhotoMapView.swift          # MapKit 지도 + GPS 핀
     ├── PhotoBrowserModel.swift     # 상태 관리, 사진 로딩, 클립보드 & 파일 작업
     ├── RootFolderStore.swift       # Security-Scoped Bookmark 관리
+    ├── FileProbe.swift             # 파일 시스템 호출 타임아웃 래퍼 (응답 없는 네트워크 드라이브 대응)
     ├── DeleteConfirmDialog.swift   # 휴지통 이동 확인 오버레이
     ├── CopyMoveConfirmDialog.swift # 복사/이동 확인 오버레이 (드래그-앤-드롭)
     ├── RatingStore.swift           # XMP 별점 읽기/쓰기 (임베드 + 사이드카)
