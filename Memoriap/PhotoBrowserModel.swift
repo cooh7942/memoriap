@@ -860,6 +860,21 @@ enum PhotoMetadata {
         return image
     }
 
+    /// 확대(핀치 줌) 시 사용하는 고해상도 이미지. 용량이 커서 캐시하지 않는다.
+    nonisolated static func loadZoomImage(from url: URL, maxPixel: Int = 8192) -> NSImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
     // Extracts a thumbnail from the first available frame; respects track transform for portrait video.
     nonisolated static func loadVideoThumbnail(from url: URL) async -> NSImage? {
         if let cached = thumbnailCache.object(forKey: url as NSURL) { return cached }
