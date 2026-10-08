@@ -28,8 +28,7 @@ struct PhotoDisplayArea: View {
                         VideoPlayerView(url: photo.url)
                             .id(photo.url)
                     } else {
-                        PhotoImageView(photo: photo)
-                            .onDrag { NSItemProvider(object: photo.url as NSURL) }
+                        PhotoImageView(photo: photo, allowsDragOut: true)
                     }
                 }
                 .onTapGesture(count: 2) { model.enterFullScreen() }
@@ -210,45 +209,171 @@ struct VideoPlayerView: View {
 
 // MARK: - Full-resolution image with downsampling (High #7)
 
+/// 사진 표시 + 트랙패드 핀치 줌. 확대 상태에서는 드래그로 이동한다.
 struct PhotoImageView: View {
     let photo: PhotoItem
+    /// 확대하지 않은 상태에서 사진을 Finder 등으로 끌어내기 허용 (센터 뷰)
+    var allowsDragOut = false
+
     @State private var image: NSImage? = nil
+    /// 확대 시 불러오는 고해상도 이미지 (기본 표시용은 2048px로 축소되어 확대하면 흐려짐)
+    @State private var zoomImage: NSImage? = nil
+
+    @State private var scale: CGFloat = 1
+    @State private var baseScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
+
+    private let maxScale: CGFloat = 8
+    /// 이 배율을 넘으면 고해상도 이미지를 불러온다
+    private let hiResThreshold: CGFloat = 1.5
+
+    private var isZoomed: Bool { scale > 1.001 }
 
     var body: some View {
-        Group {
-            if let img = image {
-                Image(nsImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let thumb = photo.thumbnail {
-                // 풀해상도가 아직 도착 안 했을 때 썸네일을 임시로 보여준다.
-                // 첫 폴더 첫 사진에서 ProgressView만 보이는 빈 화면을 줄이는 게 핵심.
-                Image(nsImage: thumb)
-                    .resizable()
-                    .interpolation(.medium)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(alignment: .bottomTrailing) {
-                        ProgressView()
-                            .scaleEffect(0.5)
-                            .padding(8)
-                    }
-            } else {
-                ProgressView()
-            }
+        GeometryReader { geo in
+            content
+                .scaleEffect(scale)
+                .offset(offset)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .contentShape(Rectangle())
+                .clipped()
+                .gesture(magnifyGesture(in: geo.size))
+                .gesture(panGesture(in: geo.size), including: isZoomed ? .all : .subviews)
+                .modifier(DragOutModifier(url: photo.url, enabled: allowsDragOut && !isZoomed))
         }
         .task(id: photo.url) {
+            // 사진이 바뀌면 배율 초기화
+            resetZoom(animated: false)
+            zoomImage = nil
             // ⚠️ image = nil로 리셋하지 않는다.
             // 리셋하면 새 사진이 로드될 때까지 ProgressView가 깜빡인다.
             // 이전 사진을 그대로 두면 새 이미지가 준비된 순간 cross-fade되어 자연스러움.
-            // 새 사진 로드가 실패하면 image = nil이 되어 위의 썸네일 fallback이 작동.
+            // 새 사진 로드가 실패하면 image = nil이 되어 아래의 썸네일 fallback이 작동.
             let url = photo.url
             let loaded = await Task.detached {
                 PhotoMetadata.loadDisplayImage(from: url)
             }.value
             if Task.isCancelled { return }
             image = loaded
+        }
+        .task(id: scale > hiResThreshold) {
+            guard scale > hiResThreshold, zoomImage == nil else { return }
+            let url = photo.url
+            let loaded = await Task.detached(priority: .userInitiated) {
+                PhotoMetadata.loadZoomImage(from: url)
+            }.value
+            // 불러오는 사이 다른 사진으로 넘어갔으면 버린다
+            if Task.isCancelled || url != photo.url { return }
+            zoomImage = loaded
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let img = zoomImage ?? image {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let thumb = photo.thumbnail {
+            // 풀해상도가 아직 도착 안 했을 때 썸네일을 임시로 보여준다.
+            // 첫 폴더 첫 사진에서 ProgressView만 보이는 빈 화면을 줄이는 게 핵심.
+            Image(nsImage: thumb)
+                .resizable()
+                .interpolation(.medium)
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .bottomTrailing) {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .padding(8)
+                }
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: Zoom
+
+    private func magnifyGesture(in size: CGSize) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                // 축소 방향은 살짝만 허용 (손을 떼면 1배로 복귀)
+                let newScale = min(max(baseScale * value.magnification, 0.8), maxScale)
+                // 핀치를 시작한 지점이 손가락 아래에 고정되도록 offset 보정
+                let anchor = CGPoint(x: value.startLocation.x - size.width / 2,
+                                     y: value.startLocation.y - size.height / 2)
+                let contentX = (anchor.x - baseOffset.width) / baseScale
+                let contentY = (anchor.y - baseOffset.height) / baseScale
+                scale = newScale
+                offset = CGSize(width: anchor.x - contentX * newScale,
+                                height: anchor.y - contentY * newScale)
+            }
+            .onEnded { _ in
+                if scale <= 1 {
+                    resetZoom(animated: true)
+                } else {
+                    baseScale = scale
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        offset = clampedOffset(offset, in: size)
+                    }
+                    baseOffset = offset
+                }
+            }
+    }
+
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                offset = clampedOffset(CGSize(width: baseOffset.width + value.translation.width,
+                                              height: baseOffset.height + value.translation.height),
+                                       in: size)
+            }
+            .onEnded { _ in
+                baseOffset = offset
+            }
+    }
+
+    /// 확대된 사진의 가장자리가 화면 안쪽으로 들어오지 않도록 이동 범위 제한
+    private func clampedOffset(_ proposed: CGSize, in size: CGSize) -> CGSize {
+        let fitted = fittedSize(in: size)
+        let limitX = max(0, (fitted.width * scale - size.width) / 2)
+        let limitY = max(0, (fitted.height * scale - size.height) / 2)
+        return CGSize(width: min(max(proposed.width, -limitX), limitX),
+                      height: min(max(proposed.height, -limitY), limitY))
+    }
+
+    /// 1배율에서 화면에 맞춰(.fit) 표시되는 사진 크기
+    private func fittedSize(in size: CGSize) -> CGSize {
+        guard let imgSize = (zoomImage ?? image ?? photo.thumbnail)?.size,
+              imgSize.width > 0, imgSize.height > 0 else { return size }
+        let ratio = min(size.width / imgSize.width, size.height / imgSize.height)
+        return CGSize(width: imgSize.width * ratio, height: imgSize.height * ratio)
+    }
+
+    private func resetZoom(animated: Bool) {
+        let apply = {
+            scale = 1
+            offset = .zero
+        }
+        if animated { withAnimation(.easeOut(duration: 0.2), apply) } else { apply() }
+        baseScale = 1
+        baseOffset = .zero
+    }
+}
+
+/// 확대 중에는 드래그가 사진 이동이어야 하므로 끌어내기(onDrag)를 끈다.
+private struct DragOutModifier: ViewModifier {
+    let url: URL
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onDrag { NSItemProvider(object: url as NSURL) }
+        } else {
+            content
         }
     }
 }

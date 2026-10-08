@@ -33,6 +33,7 @@
 - **Star rating** — Rate each photo 1–5 stars in the status bar (click same star to clear); saved as Lightroom-compatible XMP `xmp:Rating` metadata — embedded for JPEG/HEIC, sidecar `.xmp` for other formats
 - **Rating filter** — Multi-select exact-match filter: choose one or more star values (1–5) to show only photos with that exact rating; deselect all to restore the full list. Filter bar is always visible below the photo display.
 - **Fullscreen view** — Double-click the center photo or click the icon in the top-right corner to enter full-window view; navigate with ← → arrow keys; press ESC or double-click to exit.
+- **Pinch zoom** — Pinch on the trackpad to zoom photos up to 8× (center panel and fullscreen); zoom follows your fingers, drag to pan while zoomed, and a higher-resolution image loads automatically. Pinch back out to return to fit; zoom resets when switching photos.
 - **Multi-select** — ⌘+click thumbnails to toggle individual selection; Shift+click for range selection. Copy, cut, drag, or delete all selected files at once.
 - **Corrupted-file handling** — 0KB or undecodable photos are excluded from the thumbnail strip; a warning alert lists the affected filenames.
 
@@ -78,6 +79,7 @@ Then press **⌘R** in Xcode.
 | Filter by rating | Click one or more star numbers in the filter bar (exact match, multi-select); click **전체** to clear |
 | Fullscreen view | Double-click the center photo, or click the ⤢ icon (top-right of center panel) |
 | Exit fullscreen | ESC, or double-click again |
+| Zoom in / out | Pinch on the trackpad; drag to pan while zoomed |
 
 ### Keyboard shortcuts at a glance
 
@@ -227,6 +229,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 - **동영상 재생** — 네이티브 AVKit 컨트롤로 iPhone(.mov) 및 Android(.mp4) 동영상을 센터 패널에서 재생; 썸네일 스트립에 첫 프레임 + 재생 배지 표시; 동영상이 많은 폴더에서도 썸네일 동시 생성 수를 제한해 안정적으로 동작
 - **별점** — 상태바에서 사진별 1~5 별점 부여 (같은 별 재클릭 시 해제); Lightroom 호환 XMP `xmp:Rating` 메타데이터로 저장 — JPEG/HEIC는 파일 내 임베드, 기타 포맷은 `.xmp` 사이드카 생성
 - **별점 필터** — 다중 선택 정확히 일치 필터: 1~5 중 하나 이상 선택 시 해당 별점 사진만 표시(이상 ❌); 전체 해제 시 전체 목록 복원. 필터 바는 항상 표시
+- **핀치 줌** — 트랙패드 핀치로 사진을 최대 8배까지 확대 (센터 패널·전체 화면); 손가락 위치를 기준으로 확대되고, 확대 상태에서 드래그로 이동, 확대 시 고해상도 이미지를 자동으로 불러옴. 다시 오므리면 원래 크기로 복귀하고, 다른 사진으로 넘어가면 초기화
 
 ## 요구 사항
 
@@ -268,6 +271,7 @@ Xcode에서 **⌘R** 을 누르면 빌드 및 실행됩니다.
 | 루트 폴더 제거 | 루트 폴더 우클릭 → 이 폴더를 목록에서 제거 |
 | 별점 부여 | 하단 상태바의 별 버튼 클릭; 같은 별 재클릭 시 해제 |
 | 별점 필터 | 필터 바에서 숫자(1~5) 클릭 — 다중 선택, 정확히 일치; **전체** 클릭 시 초기화 |
+| 확대 / 축소 | 트랙패드 핀치; 확대 상태에서 드래그로 이동 |
 
 ### 키보드 단축키 요약
 
