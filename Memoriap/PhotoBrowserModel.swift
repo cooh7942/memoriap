@@ -248,12 +248,11 @@ class PhotoBrowserModel: ObservableObject {
 
     private func restoreCustomFavorites() {
         guard let paths = UserDefaults.standard.array(forKey: customFavoritesKey) as? [String] else { return }
-        let fm = FileManager.default
-        customFavorites = paths.compactMap { path -> URL? in
-            var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return nil }
-            return URL(fileURLWithPath: path)
-        }
+        // ⚠️ 여기서 존재 여부를 확인하지 않는다.
+        // 연결이 끊긴 네트워크 드라이브 경로에 fileExists를 호출하면 메인 스레드가 멈춰 앱이 뜨지 않는다.
+        // 또한 지금 접근할 수 없다는 이유로 목록에서 빼면 다음 저장 때 영구 삭제된다.
+        // 접근 가능 여부는 사용자가 클릭했을 때 loadFolder에서 타임아웃과 함께 확인한다.
+        customFavorites = paths.map { URL(fileURLWithPath: $0) }
     }
 
     // MARK: - Session restoration (Security-Scoped Bookmark 기반)
@@ -261,11 +260,11 @@ class PhotoBrowserModel: ObservableObject {
     /// 앱 시작 시 ContentView.task에서 한 번 호출.
     /// RootFolderStore가 북마크를 복원하고, 마지막으로 보던 폴더를 로드한다.
     func restoreSession() async {
-        let hasValid = RootFolderStore.shared.bootstrapOnLaunch()
+        let hasValid = await RootFolderStore.shared.bootstrapOnLaunch()
         if hasValid, let path = UserDefaults.standard.string(forKey: lastFolderPathKey) {
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
-                let url = URL(fileURLWithPath: path)
+            let url = URL(fileURLWithPath: path)
+            // 마지막 폴더가 응답 없는 네트워크 드라이브에 있으면 오류 알림 없이 건너뛴다.
+            if await FileProbe.isReachableDirectory(url) {
                 currentFolderURL = url
                 await loadPhotos(from: url)
             }
@@ -286,11 +285,10 @@ class PhotoBrowserModel: ObservableObject {
 
         // 폴더가 정말 존재하는지 / 디렉터리가 맞는지 사전 확인.
         // 사용자가 USB가 빠진 사이에 즐겨찾기·트리에서 그 폴더를 클릭하는 경우 등에 안전.
-        var isDir: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-        guard exists, isDir.boolValue else {
+        // 연결이 끊긴 네트워크 드라이브는 응답하지 않으므로 타임아웃과 함께 확인한다.
+        guard await FileProbe.isReachableDirectory(url) else {
             Logger.app.error("loadFolder: folder unavailable — \(url.path, privacy: .public)")
-            lastError = "폴더를 열 수 없습니다: \(url.lastPathComponent)\n(이동·삭제되었거나 외부 디스크가 분리되었을 수 있습니다)"
+            lastError = "폴더를 열 수 없습니다: \(url.lastPathComponent)\n(이동·삭제되었거나 외부 디스크·네트워크 드라이브 연결이 끊겼을 수 있습니다)"
             if UserDefaults.standard.string(forKey: lastFolderPathKey) == url.path {
                 UserDefaults.standard.removeObject(forKey: lastFolderPathKey)
             }
@@ -312,13 +310,23 @@ class PhotoBrowserModel: ObservableObject {
 
         let supportedExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "mov", "mp4", "m4v"]
 
-        let (photoURLs, corruptedNames): ([URL], [String]) = await Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
-            let contents = (try? fm.contentsOfDirectory(
+        // 폴더 확인 직후 네트워크 연결이 끊기면 목록 읽기가 끝나지 않아 로딩 표시가 계속 남는다.
+        // 목록 읽기에만 타임아웃을 건다 (사진 수가 많은 로컬 폴더도 넉넉히 끝나는 시간).
+        guard let contents = await FileProbe.run(timeout: 15, {
+            (try? FileManager.default.contentsOfDirectory(
                 at: folderURL,
                 includingPropertiesForKeys: nil,
                 options: .skipsHiddenFiles
             )) ?? []
+        }) else {
+            Logger.app.error("loadPhotos: listing timed out — \(folderURL.path, privacy: .public)")
+            guard currentFolderURL == folderURL else { return }
+            isLoadingFiles = false
+            lastError = "폴더가 응답하지 않습니다: \(folderURL.lastPathComponent)\n(네트워크 드라이브 연결을 확인해 주세요)"
+            return
+        }
+
+        let (photoURLs, corruptedNames): ([URL], [String]) = await Task.detached(priority: .userInitiated) {
             let allURLs = contents
                 .filter { supportedExtensions.contains($0.pathExtension.lowercased()) }
                 .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }

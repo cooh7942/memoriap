@@ -306,7 +306,7 @@ private struct SidebarTreeList: View {
                 object: nil, queue: .main
             ) { _ in
                 // 외장 디스크 재연결 시 savedBookmarks에 보존된 북마크로 자동 복원 시도
-                RootFolderStore.shared.retryUnavailable()
+                Task { @MainActor in await RootFolderStore.shared.retryUnavailable() }
             }
             unmountObserver = NSWorkspace.shared.notificationCenter.addObserver(
                 forName: NSWorkspace.didUnmountNotification,
